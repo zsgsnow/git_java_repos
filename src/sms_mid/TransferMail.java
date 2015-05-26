@@ -14,6 +14,7 @@ import java.sql.SQLException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Properties;
+import java.util.regex.Pattern;
 
 import javax.mail.Flags;
 import javax.mail.Folder;
@@ -38,10 +39,11 @@ public class TransferMail {
      * 4：读取邮件转发至数据库
      */
  static Logger logger = Logger.getLogger(TransferMail.class);
- static String adminPhone = null;
+ static String adminPhone = null;//管理员手机号，运行错误信息，将发至该手机
  static PreparedStatement  preStatement = null;
  static Store store = null;
  static SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy/MM/dd HH:mm");//设置输出的时间格式
+ static Pattern p_mobile = Pattern.compile("^((13[0-9])|(15[^4,\\D])|(18[0,5-9]))\\d{8}$");  //判断配置文件config/users.txt中手机号是否正确
  
  public static void main(String[] args) {
 		//1. 获得数据库和邮件服务器的配置信息
@@ -67,15 +69,13 @@ public class TransferMail {
 		try {
 			while((lineTxt = bufferedReader.readLine()) != null){
 				if(lineTxt.trim().startsWith("#")) continue;
-				String[] user_ary = lineTxt.trim().split("\\s+");//空格分割一行用户信息
-				if(user_ary.length<3){
-					logger.error("失败：查找用户资料  " + ". 应该形如: 用户名	密码	手机号");
-					bufferedReader.close();
-					return;
-				}
-				userName = user_ary[0];
-				userPwd =  user_ary[1];
-				if (isOkToMailAccount(userName,userPwd) == false) continue; //若账号不可连接，继续下一个账号
+				String[] userInfo = lineTxt.trim().split("\\s+");//空格分割一行用户信息
+				
+				if(isOKUserInfo(userInfo)==false) continue; //进入下一条邮箱与手机对应配置
+				
+				userName = userInfo[0];
+				userPwd =  userInfo[1];
+				if (isOKToMailAccount(userName,userPwd) == false) continue; //若账号不可连接，继续下一个账号
 				Folder folder = store.getFolder("INBOX");
 				folder.open(Folder.READ_WRITE);
 				Message message[] = folder.getMessages();
@@ -107,8 +107,8 @@ public class TransferMail {
 					}
 					if (b_content){
 						Boolean b_AllOK = true; //同一邮件，对应多个手机号，会写入多条记录到数据库，判断是否都成功
-						for (int k = 2; k < user_ary.length; k ++){
-							if((insertDb(user_ary[k],content))==false){
+						for (int k = 2; k < userInfo.length; k ++){
+							if((insertDb(userInfo[k],content))==false){
 								b_AllOK = false;
 								break;
 							}
@@ -181,7 +181,7 @@ public class TransferMail {
    static void connectToMail(Properties props){
     	Properties mailProp = new Properties();
 	    mailProp.put("mail.host", props.getProperty("mail.host"));
-	    if (isOKPingToMail(props.getProperty("mail.host"))){
+	    if (isOKToMailServer(props.getProperty("mail.host"))){
 	    	logger.info("成功：连接邮件服务器：" + props.getProperty("mail.host"));
 	    }else{
 	    	String errMsg = "失败：无法ping通邮件服务器：" + props.getProperty("mail.host");
@@ -197,7 +197,7 @@ public class TransferMail {
 		}
     }
    //判断邮件服务器是否可以ping通
-   static Boolean isOKPingToMail(String s_ip){
+   static boolean isOKToMailServer(String s_ip){
 	   Runtime runtime = Runtime.getRuntime(); // 获取当前程序的运行进对象
 	   Process process = null; // 声明处理类对象
 	   String line = null; // 返回行信息
@@ -243,7 +243,7 @@ public class TransferMail {
         return read;
     }
     // 判断是否能正确连接到邮箱账号
-    static Boolean isOkToMailAccount(String userName, String userPwd){
+    static boolean isOKToMailAccount(String userName, String userPwd){
     	try{
 			store.connect(userName, userPwd);
 			return true;
@@ -261,7 +261,7 @@ public class TransferMail {
 		insertDb(adminPhone,s_dt + ", " + msg);
     }
 	//将邮件内容和手机号信息写入数据库待发送表(t_sendtask)
-    static Boolean insertDb(String phone,String msg){
+    static boolean insertDb(String phone,String msg){
 		try {
 			preStatement.setString(1, phone);
 			preStatement.setString(2, msg);
@@ -271,6 +271,20 @@ public class TransferMail {
 			logger.error("SQL语句执行异常："+e1.toString());
 			return false;
 		}
+    }
+    //判断用户配置信息是否合乎规范
+    static boolean isOKUserInfo(String[] userInfo){
+    	if (userInfo.length<3) {
+    		logger.error("失败：查找用户资料 , 应该形如: 用户名	密码	手机号      。。。,可以多个手机号");
+    		return false;
+    	}
+    	for (int i = 2;i<userInfo.length;i++){//判断输入的手机号，是否正确
+    		if (p_mobile.matcher(userInfo[i]).matches()==false) {
+    			logger.error("错误：手机号" + userInfo[i]+"输入有误，在文件config/users.txt中，账号" +userInfo[0] + "的邮件未转发。");
+    			return false;
+    		}
+    	}
+    	return true;
     }
 
 }
