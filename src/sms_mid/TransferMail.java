@@ -28,16 +28,18 @@ import javax.mail.Store;
 import org.apache.log4j.Logger;
 import org.apache.log4j.PropertyConfigurator;
 
+
+
 public class TransferMail {
-	 /**
-     * 功能：读取邮件转发至短信中间件mysql数据库
-     * Author: Zsg
-     * 步骤：
-     * 1：先获得数据库和邮件服务器的配置信息
-     * 2：根据配置信息连接mysql数据库
-     * 3：根据配置信息连接邮件服务器
-     * 4：读取邮件转发至数据库
-     */
+	/**
+	 * 功能：读取邮件转发至短信中间件mysql数据库
+	 * 步骤：
+	 * 1：先获得数据库和邮件服务器的配置信息
+	 * 2：根据配置信息连接mysql数据库
+	 * 3：根据配置信息连接邮件服务器
+	 * 4：读取邮件转发至数据库
+	 * @author Zsg
+	 */
  static Logger logger = Logger.getLogger(TransferMail.class);
  static String adminPhone = null;//管理员手机号，运行错误信息，将发至该手机
  static PreparedStatement  preStatement = null;
@@ -146,8 +148,12 @@ public class TransferMail {
 		logger.error("IO异常："+e.toString());
 		return;
 	}
-	}
-//1. 获得数据库和邮件服务器的配置信息
+	} 
+   /**
+    * 获得数据库和邮件服务器的配置信息 
+    * @return Properties
+    * 配置信息内容
+    */
     static Properties getConfig(){
     	Properties props = new Properties();
 		PropertyConfigurator.configure("config/log4j.properties");
@@ -161,7 +167,13 @@ public class TransferMail {
 			return null;
 		}
     }
-  //2. 根据配置信息连接mysql数据库
+
+    /**
+     * 根据配置信息连接mysql数据库
+     * @param props
+     * 配置信息config/Config.properties文件内容
+     * @return void
+     */
     static void connectToMysql(Properties props){
     	//2. to connect to DB server
 	      String driverName="com.mysql.jdbc.Driver";
@@ -177,7 +189,13 @@ public class TransferMail {
 				logger.error("失败：连接数据库 ："+dbURL+"，请检查如网络能ping通、防火墙允许、数据库开启和配置文件正确。");
 			} 
     }
-	//3. 根据配置信息连接邮件服务器
+    
+    /**
+     * 根据配置信息连接邮件服务器
+     * @param props 
+     * 配置信息
+     * @return void
+     */
    static void connectToMail(Properties props){
     	Properties mailProp = new Properties();
 	    mailProp.put("mail.host", props.getProperty("mail.host"));
@@ -196,7 +214,15 @@ public class TransferMail {
 			logger.error("NoSuchProvider异常：" + e.toString());
 		}
     }
-   //判断邮件服务器是否可以ping通
+
+   /**
+    * 判断邮件服务器是否可以连接
+    * @param s_ip
+    * 邮件服务器的IP地址
+    * @return boolean
+    * true 表示能连接
+    * false 表示不能连接
+    */
    static boolean isOKToMailServer(String s_ip){
 	   Runtime runtime = Runtime.getRuntime(); // 获取当前程序的运行进对象
 	   Process process = null; // 声明处理类对象
@@ -226,7 +252,10 @@ public class TransferMail {
 	   return res;
    }
    
-    // 读取邮箱与手机号相关信息
+   /**
+    * 读取邮箱与手机号相关信息 config/users.txt
+    * @return InputStreamReader
+    */
     static InputStreamReader readUsersInfo(){
 		String filePath = "config/users.txt";
         File file=new File(filePath);
@@ -242,7 +271,17 @@ public class TransferMail {
         }
         return read;
     }
-    // 判断是否能正确连接到邮箱账号
+    //
+    /**
+     * 判断是否能连接到邮箱账号
+     * @param userName
+     * 邮箱账号
+     * @param userPwd
+     * 账号密码
+     * @return boolean
+     * true 表示能连接
+     * false 表示不能连接
+     */
     static boolean isOKToMailAccount(String userName, String userPwd){
     	try{
 			store.connect(userName, userPwd);
@@ -254,13 +293,29 @@ public class TransferMail {
 				return false;
 			}
     }
-    //将程序运行的错误信息写入数据库，加上当前系统时间
+    //
+    /**
+     * 将程序运行的错误信息带上当前系统时间写入数据库，
+     * @param msg
+     * 运行的错误信息
+     * @return void
+     */
     static void insertErrorToDb(String msg){
     	Date dt = new Date();
 		String s_dt = dateFormat.format(dt);
 		insertDb(adminPhone,s_dt + ", " + msg);
     }
-	//将邮件内容和手机号信息写入数据库待发送表(t_sendtask)
+	
+    /**
+     * 将邮件内容和手机号信息写入数据库待发送表(t_sendtask)
+     * @param phone
+     * 手机号码
+     * @param msg
+     * 待发送的内容
+     * @return boolean
+     * true 表示写入成功
+     * false 表示写入失败
+     */
     static boolean insertDb(String phone,String msg){
 		try {
 			preStatement.setString(1, phone);
@@ -272,7 +327,15 @@ public class TransferMail {
 			return false;
 		}
     }
-    //判断用户配置信息是否合乎规范
+    //
+    /**
+     * 判断用户配置信息config/users.txt内容是否正确
+     * @param userInfo
+     * config/users.txt内容
+     * @return boolean
+     * true 表示配置信息正确
+     * false 表示配置信息错误
+     */
     static boolean isOKUserInfo(String[] userInfo){
     	if (userInfo.length<3) {
     		logger.error("失败：查找用户资料 , 应该形如: 用户名	密码	手机号      。。。,可以多个手机号");
